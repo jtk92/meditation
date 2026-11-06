@@ -120,6 +120,12 @@ select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);ba
         <button class="chip" data-v="1" aria-pressed="false">한 번 (절 시작)</button>
       </div>
       <span class="note" id="cueNote"></span>
+      <div class="chips" id="soundChips">
+        <button class="chip" data-v="soft" aria-pressed="true">부드러운 나무 음</button>
+        <button class="chip" data-v="chime" aria-pressed="false">작은 종</button>
+        <button class="chip" data-v="wood" aria-pressed="false">목탁</button>
+        <button class="chip" id="soundTry">▶ 듣기</button>
+      </div>
     </div>
 
     <label class="check"><input type="checkbox" id="chain"> 절을 마치면 명상으로 이어가기</label>
@@ -212,7 +218,7 @@ select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);ba
         <div class="row"><input id="gap" type="range" min="0" max="5" step="0.5" value="2"><span class="val" id="gapVal">2초</span></div>
       </div>
       <div class="tests">
-        <button class="btn" id="tMok" style="padding:8px 14px">목탁 듣기</button>
+        <button class="btn" id="tMok" style="padding:8px 14px">절 알림 듣기</button>
         <button class="btn" id="tBell" style="padding:8px 14px">종 듣기</button>
         <button class="btn" id="tVoice" style="padding:8px 14px">목소리 듣기</button>
       </div>
@@ -228,7 +234,7 @@ const DEFAULT_GUIDE = "몸과 마음을 편안히 한 후 모든 동작과 생�
 const MILESTONES = [108, 200, 300];
 
 /* ---------- settings ---------- */
-const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.75, pitch:0.9, gap:2.5, voice:"", readGuide:true, hideTime:false, useRec:false, chain:false, chainGap:10, cues:3, opening:"잠시 명상하겠습니다.", guide:DEFAULT_GUIDE };
+const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.75, pitch:0.9, gap:2.5, voice:"", readGuide:true, hideTime:false, useRec:false, chain:false, chainGap:10, cues:3, cueSound:"soft", opening:"잠시 명상하겠습니다.", guide:DEFAULT_GUIDE };
 try { Object.assign(S, JSON.parse(localStorage.getItem("practice-timer") || "{}")); } catch(e) {}
 const save = () => { try { localStorage.setItem("practice-timer", JSON.stringify(S)); } catch(e) {} };
 
@@ -255,6 +261,26 @@ function moktak(t, bus, level = 1, pm = 1){
   const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), gn = ctx.createGain();
   n.buffer = noiseBuf; f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 1.5; gn.gain.value = .35 * level;
   n.connect(f).connect(gn).connect(bus); n.start(t);
+}
+/* 부드러운 알림음: 동글동글한 나무 음 / 작은 종(경쇠) */
+function tone(t, bus, freq, peak, decay, type = "sine", attack = .012){
+  const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+  o.type = type; o.frequency.value = freq; f.type = "lowpass"; f.frequency.value = 1800;
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(.0001, t + decay);
+  o.connect(f).connect(g).connect(bus); o.start(t); o.stop(t + decay + .05);
+}
+function cue(t, bus, level = 1, pm = 1){
+  const light = level < 1;
+  if(S.cueSound === "wood") return moktak(t, bus, level, pm);
+  if(S.cueSound === "chime"){
+    const base = light ? 1046 : 784;
+    [[1, .16], [2.4, .05], [4.1, .02]].forEach(([r, a]) => tone(t, bus, base * r, a * (light ? .6 : 1), light ? 1.6 : 2.6, "sine", .005));
+    return;
+  }
+  /* soft (기본) */
+  const base = light ? 523 : 392;
+  tone(t, bus, base, light ? .22 : .38, light ? .55 : .9, "triangle", .015);
+  tone(t, bus, base * 2, light ? .04 : .07, .35, "sine", .015);
 }
 function bell(t, bus, dur = 9){
   const base = 247;
@@ -465,10 +491,10 @@ function bowTick(){
   const now = ctx.currentTime, ahead = now + 1.5;
   while(bow.nextK <= S.target && bow.t0 + (bow.nextK - 1) * S.tempo < ahead){
     const k = bow.nextK, t = bow.t0 + (k - 1) * S.tempo;
-    moktak(t, bow.bus); bow.events.push({ t, k });
+    cue(t, bow.bus); bow.events.push({ t, k });
     if(S.cues === 3){
-      [1, 2].forEach(j => { const tj = t + S.tempo * j / 3; moktak(tj, bow.bus, .45, 1.25); bow.events.push({ t:tj, k, j }); });
-      if(k === S.target) moktak(t + S.tempo, bow.bus);
+      [1, 2].forEach(j => { const tj = t + S.tempo * j / 3; cue(tj, bow.bus, .45, 1.25); bow.events.push({ t:tj, k, j }); });
+      if(k === S.target) cue(t + S.tempo, bow.bus);
     }
     bow.nextK++;
   }
@@ -573,7 +599,7 @@ $("rate").oninput = e => { S.rate = +e.target.value; $("rateVal").textContent = 
 $("voice").onchange = e => { S.voice = e.target.value; S.voiceManual = true; save(); };
 $("pitch").oninput = e => { S.pitch = +e.target.value; $("pitchVal").textContent = S.pitch.toFixed(2); save(); };
 $("gap").oninput = e => { S.gap = +e.target.value; $("gapVal").textContent = S.gap + "초"; save(); };
-$("tMok").onclick = () => { ac(); const b = newBus(); moktak(ctx.currentTime + .05, b); };
+$("tMok").onclick = () => { ac(); const b = newBus(), t = ctx.currentTime + .05; cue(t, b, .45, 1.25); cue(t + .9, b, .45, 1.25); cue(t + 1.8, b); };
 $("tBell").onclick = () => { ac(); const b = newBus(); bell(ctx.currentTime + .05, b, 8); };
 $("tVoice").onclick = () => { if(synth){ synth.cancel(); readLines(S.guide.replace(/[()]/g, "").split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 2), () => {}); } };
 
@@ -592,6 +618,10 @@ $("gap").value = S.gap; $("gapVal").textContent = S.gap + "초";
 $("readGuide").checked = S.readGuide; $("hideTime").checked = S.hideTime;
 $("chain").checked = S.chain; $("chainGap").value = S.chainGap;
 $("opening").value = S.opening;
+const soundUI = () => document.querySelectorAll("#soundChips .chip[data-v]").forEach(c => c.setAttribute("aria-pressed", c.dataset.v === S.cueSound));
+document.querySelectorAll("#soundChips .chip[data-v]").forEach(c => c.onclick = () => { S.cueSound = c.dataset.v; save(); soundUI(); $("tMok").click(); });
+$("soundTry").onclick = () => $("tMok").click();
+soundUI();
 $("opening").oninput = e => { S.opening = e.target.value; save(); }; $("guide").value = S.guide;
 setTarget(S.target); setMed(S.medMin); medUI();
 setInterval(() => { if(ctx){ bowTick(); medTick(); } }, 100);
