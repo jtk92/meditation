@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>절·명상 타이머</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: one quiet column; each practice gets a single large dial, controls beneath, shared sound settings at the bottom */
+:root{
+  --bg:#eef0eb; --surface:#f8f9f6; --ink:#1f2a26; --muted:#5b6862; --line:#d3dad2;
+  --accent:#2f6b5a; --accent-ink:#ffffff; --soft:#dfe8e2; --gold:#9a7428;
+  --display:"Gowun Batang","Nanum Myeongjo","Batang",serif;
+  --body:"Noto Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111614; --surface:#19201d; --ink:#e3eae5; --muted:#98a69f; --line:#2b3531;
+  --accent:#82c2a9; --accent-ink:#0e1412; --soft:#20302a; --gold:#d8b468; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111614; --surface:#19201d; --ink:#e3eae5; --muted:#98a69f; --line:#2b3531;
+  --accent:#82c2a9; --accent-ink:#0e1412; --soft:#20302a; --gold:#d8b468; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:1.6rem;margin:0;letter-spacing:.02em}
+.sub{color:var(--muted);font-size:.85rem}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--soft);border-radius:12px;padding:4px;gap:4px}
+.tabs button{border:0;background:transparent;color:var(--muted);font:500 1rem var(--body);padding:10px;border-radius:9px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0/.08)}
+.panel{display:flex;flex-direction:column;gap:18px}
+.dial{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 20px 22px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.big{font-family:var(--display);font-weight:700;font-size:clamp(4.5rem,22vw,7.5rem);line-height:1;font-variant-numeric:tabular-nums;transition:transform .12s ease}
+.big.pulse{transform:scale(1.04)}
+.unit{font-family:var(--display);font-size:1.1rem;color:var(--muted)}
+.state{font-size:.9rem;color:var(--accent);font-weight:500;min-height:1.6em}
+.track{position:relative;width:100%;height:8px;background:var(--soft);border-radius:4px;margin-top:22px}
+.fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent);border-radius:4px;transition:width .3s}
+.mark{position:absolute;top:-5px;width:2px;height:18px;background:var(--gold);transform:translateX(-1px)}
+.mark span{position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:.72rem;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.meta{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-top:24px;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.meta b{color:var(--ink);font-weight:500}
+.field{display:flex;flex-direction:column;gap:8px}
+.label{font-size:.78rem;letter-spacing:.06em;color:var(--muted);font-weight:500}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 .95rem var(--body);padding:8px 14px;border-radius:999px;cursor:pointer;font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip input{width:4.2em;border:0;background:transparent;color:inherit;font:inherit;text-align:right;padding:0}
+.row{display:flex;align-items:center;gap:12px}
+.row input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.val{min-width:5.5em;text-align:right;font-variant-numeric:tabular-nums}
+.actions{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 1rem var(--body);padding:14px;border-radius:12px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1.05rem}
+.btn:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+textarea{width:100%;min-height:8.5em;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:1rem/1.7 var(--display);padding:12px;resize:vertical}
+label.check{display:flex;gap:8px;align-items:center;cursor:pointer}
+label.check input{accent-color:var(--accent);width:18px;height:18px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 16px}
+details[open]{padding-bottom:16px}
+summary{cursor:pointer;padding:12px 0;font-weight:500}
+details .inner{display:flex;flex-direction:column;gap:16px}
+select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit}
+.tests{display:flex;gap:8px;flex-wrap:wrap}
+.note{font-size:.8rem;color:var(--muted)}
+.hidebig .big{visibility:hidden}
+@media (prefers-reduced-motion: reduce){.big,.fill{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>절·명상 타이머</h1>
+    <span class="sub">스페이스바: 시작 / 일시정지</span>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-bow" role="tab" aria-selected="true" aria-controls="p-bow">절 수행</button>
+    <button id="tab-med" role="tab" aria-selected="false" aria-controls="p-med">명상</button>
+  </div>
+
+  <!-- 절 -->
+  <section class="panel" id="p-bow" role="tabpanel">
+    <div class="dial">
+      <div class="big" id="bowCount">0</div>
+      <div class="unit" id="bowUnit">/ 108배</div>
+      <div class="state" id="bowState">목탁 소리에 맞춰 한 배씩</div>
+      <div class="track" id="bowTrack"><div class="fill" id="bowFill"></div></div>
+      <div class="meta"><span>경과 <b id="bowElapsed">0:00</b></span><span>예상 <b id="bowTotal">18:00</b></span></div>
+    </div>
+
+    <div class="field">
+      <span class="label">목표</span>
+      <div class="chips" id="targetChips">
+        <button class="chip" data-v="108" aria-pressed="true">108배</button>
+        <button class="chip" data-v="200" aria-pressed="false">200배</button>
+        <button class="chip" data-v="300" aria-pressed="false">300배</button>
+        <span class="chip" id="targetCustomChip" aria-pressed="false"><input id="targetCustom" type="number" min="1" max="3000" placeholder="직접" aria-label="목표 절 수 직접 입력">배</span>
+      </div>
+      <span class="note">108배 · 200배 · 300배 지점마다 종이 울립니다.</span>
+    </div>
+
+    <div class="field">
+      <label class="label" for="tempo">한 배 시간</label>
+      <div class="row"><input id="tempo" type="range" min="5" max="20" step="0.5" value="10"><span class="val" id="tempoVal">10초</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="bowStart">시작</button>
+      <button class="btn" id="bowReset">처음으로</button>
+    </div>
+  </section>
+
+  <!-- 명상 -->
+  <section class="panel" id="p-med" role="tabpanel" hidden>
+    <div class="dial" id="medDial">
+      <div class="big" id="medTime">12:00</div>
+      <div class="unit">남은 시간</div>
+      <div class="state" id="medState">시간이 되면 종이 세 번 울립니다</div>
+    </div>
+
+    <div class="field">
+      <span class="label">명상 시간</span>
+      <div class="chips" id="medChips">
+        <button class="chip" data-v="10" aria-pressed="false">10분</button>
+        <button class="chip" data-v="12" aria-pressed="true">12분</button>
+        <button class="chip" data-v="20" aria-pressed="false">20분</button>
+        <button class="chip" data-v="30" aria-pressed="false">30분</button>
+        <span class="chip" id="medCustomChip" aria-pressed="false"><input id="medCustom" type="number" min="1" max="240" placeholder="직접" aria-label="명상 시간 직접 입력(분)">분</span>
+      </div>
+    </div>
+
+    <label class="check"><input type="checkbox" id="readGuide" checked> 시작할 때 안내문 읽어주기 (읽기가 끝난 뒤 시간이 시작됩니다)</label>
+    <label class="check"><input type="checkbox" id="hideTime"> 명상 중 남은 시간 숨기기</label>
+
+    <details>
+      <summary>안내문 편집</summary>
+      <div class="inner">
+        <textarea id="guide" aria-label="안내문"></textarea>
+        <button class="btn" id="guideReset" style="align-self:flex-start;padding:8px 14px">기본 문구로 되돌리기</button>
+      </div>
+    </details>
+
+    <details>
+      <summary>녹음한 목소리로 듣기</summary>
+      <div class="inner">
+        <span class="note">직접 녹음했거나 받은 음성 파일(mp3, m4a, wav)을 올리면 기계 음성 대신 그 파일을 재생한 뒤 명상이 시작됩니다. 파일은 이 노트북 브라우저에만 저장됩니다.</span>
+        <input type="file" id="recFile" accept="audio/*" aria-label="안내 음성 파일 선택">
+        <label class="check"><input type="checkbox" id="useRec" disabled> 녹음 파일로 안내 듣기</label>
+        <div class="tests"><button class="btn" id="recPlay" style="padding:8px 14px" disabled>미리 듣기</button><button class="btn" id="recClear" style="padding:8px 14px" disabled>파일 지우기</button></div>
+        <span class="note" id="recNote">저장된 파일이 없습니다.</span>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button class="btn primary" id="medStart">시작</button>
+      <button class="btn" id="medStop">그만하기</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>소리 설정</summary>
+    <div class="inner">
+      <div class="field">
+        <label class="label" for="vol">음량</label>
+        <div class="row"><input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"><span class="val" id="volVal">80%</span></div>
+      </div>
+      <div class="field">
+        <label class="label" for="voice">읽어주는 목소리</label>
+        <select id="voice"></select>
+        <span class="note" id="voiceNote"></span>
+      </div>
+      <div class="field">
+        <label class="label" for="rate">읽기 속도</label>
+        <div class="row"><input id="rate" type="range" min="0.6" max="1.2" step="0.05" value="0.8"><span class="val" id="rateVal">0.80배</span></div>
+      </div>
+      <div class="field">
+        <label class="label" for="pitch">목소리 높낮이</label>
+        <div class="row"><input id="pitch" type="range" min="0.7" max="1.2" step="0.05" value="0.95"><span class="val" id="pitchVal">0.95</span></div>
+      </div>
+      <div class="field">
+        <label class="label" for="gap">문장 사이 쉼</label>
+        <div class="row"><input id="gap" type="range" min="0" max="5" step="0.5" value="2"><span class="val" id="gapVal">2초</span></div>
+      </div>
+      <div class="tests">
+        <button class="btn" id="tMok" style="padding:8px 14px">목탁 듣기</button>
+        <button class="btn" id="tBell" style="padding:8px 14px">종 듣기</button>
+        <button class="btn" id="tVoice" style="padding:8px 14px">목소리 듣기</button>
+      </div>
+      <span class="note">노트북이 잠들면 소리가 멈출 수 있어요. 수행 중에는 화면이 꺼지지 않게 요청합니다.</span>
+    </div>
+  </details>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const DEFAULT_GUIDE = "몸과 마음을 편안히 한 후 모든 동작과 생각을 멈춘다.\n아무 할 일이 없으므로 어떤 것에도 의미를 부여하지 않는다.\n긴장하거나 애쓰지 않으며 의도적으로 숨을 쉬지 않는다.\n관심은 오직 코 끝에 두고 다만 들숨과 날숨을 알아차린다.";
+const MILESTONES = [108, 200, 300];
+
+/* ---------- settings ---------- */
+const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.8, pitch:0.95, gap:2, voice:"", readGuide:true, hideTime:false, useRec:false, guide:DEFAULT_GUIDE };
+try { Object.assign(S, JSON.parse(localStorage.getItem("practice-timer") || "{}")); } catch(e) {}
+const save = () => { try { localStorage.setItem("practice-timer", JSON.stringify(S)); } catch(e) {} };
+
+/* ---------- audio ---------- */
+let ctx, master;
+function ac(){
+  if(!ctx){ ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = S.vol; master.connect(ctx.destination); }
+  if(ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+function newBus(){ const g = ctx.createGain(); g.connect(master); return g; }
+function killBus(b){ if(!b) return; try{ b.gain.setValueAtTime(0, ctx.currentTime); b.disconnect(); }catch(e){} }
+let noiseBuf;
+function moktak(t, bus){
+  const g = ctx.createGain(), o = ctx.createOscillator();
+  o.type = "sine"; o.frequency.setValueAtTime(860, t); o.frequency.exponentialRampToValueAtTime(560, t + .07);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.9, t + .003); g.gain.exponentialRampToValueAtTime(.0001, t + .22);
+  o.connect(g).connect(bus); o.start(t); o.stop(t + .25);
+  const g2 = ctx.createGain(), o2 = ctx.createOscillator();
+  o2.type = "sine"; o2.frequency.setValueAtTime(1720, t);
+  g2.gain.setValueAtTime(.0001, t); g2.gain.exponentialRampToValueAtTime(.25, t + .002); g2.gain.exponentialRampToValueAtTime(.0001, t + .06);
+  o2.connect(g2).connect(bus); o2.start(t); o2.stop(t + .08);
+  if(!noiseBuf){ noiseBuf = ctx.createBuffer(1, ctx.sampleRate * .03, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length); }
+  const n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), gn = ctx.createGain();
+  n.buffer = noiseBuf; f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 1.5; gn.gain.value = .35;
+  n.connect(f).connect(gn).connect(bus); n.start(t);
+}
+function bell(t, bus, dur = 9){
+  const base = 247;
+  [[1,1],[2.02,.45],[2.76,.32],[4.1,.14],[5.43,.1],[8.9,.04]].forEach(([r,a], i) => {
+    [-0.6, 0.6].forEach(det => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = base * r + det;
+      const d = dur / (1 + i * .45);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(a * .32, t + .006); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+      o.connect(g).connect(bus); o.start(t); o.stop(t + d + .05);
+    });
+  });
+}
+
+/* ---------- speech ---------- */
+const synth = window.speechSynthesis;
+let voices = [];
+function loadVoices(){
+  if(!synth) { $("voiceNote").textContent = "이 브라우저는 음성 읽기를 지원하지 않습니다."; return; }
+  const all = synth.getVoices();
+  const natural = v => /natural|online|neural/i.test(v.name);
+  const score = v => (natural(v) ? 0 : 1) + (/sunhi|선히/i.test(v.name) ? -0.5 : 0);
+  voices = all.filter(v => /^ko/i.test(v.lang)).sort((a,b) => score(a) - score(b));
+  const sel = $("voice"); sel.innerHTML = "";
+  (voices.length ? voices : all).forEach(v => { const o = document.createElement("option"); o.value = v.voiceURI; o.textContent = (natural(v) ? "★ 자연스러운 음성 · " : "") + `${v.name} (${v.lang})`; sel.appendChild(o); });
+  if(S.voice && [...sel.options].some(o => o.value === S.voice)) sel.value = S.voice;
+  $("voiceNote").textContent = !voices.length ? "한국어 음성이 없습니다. Windows 설정 › 시간 및 언어 › 음성에서 한국어 음성을 추가하세요."
+    : voices.some(natural) ? "★ 표시가 붙은 음성이 가장 부드럽습니다."
+    : "더 부드러운 음성(SunHi 자연스러운 음성)은 Microsoft Edge 브라우저에서 이 페이지를 열면 목록에 나타납니다.";
+}
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+function utter(text){
+  const u = new SpeechSynthesisUtterance(text);
+  const v = synth.getVoices().find(v => v.voiceURI === $("voice").value);
+  if(v) u.voice = v; u.lang = v ? v.lang : "ko-KR"; u.rate = S.rate; u.pitch = S.pitch; u.volume = Math.min(1, S.vol + .2);
+  return u;
+}
+function say(text){ if(!synth) return; synth.speak(utter(text)); }
+/* read lines one by one; cb when finished (with safety timeout) */
+let speakToken = 0;
+function readLines(lines, cb){
+  const tok = ++speakToken;
+  if(!synth || !lines.length){ cb(); return; }
+  synth.cancel();
+  let i = 0;
+  const next = () => {
+    if(tok !== speakToken) return;
+    if(i >= lines.length){ cb(); return; }
+    const line = lines[i++], u = utter(line);
+    let fired = false;
+    const after = () => { if(fired) return; fired = true; clearTimeout(safety); setTimeout(next, (i >= lines.length ? 1 : S.gap) * 1000); };
+    const safety = setTimeout(after, line.length * 320 / S.rate + 4000);
+    u.onend = after; u.onerror = after;
+    synth.speak(u);
+  };
+  next();
+}
+
+/* ---------- recorded guide (IndexedDB) ---------- */
+let recBlob = null, recAudio = null;
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open("practice-timer", 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function recPut(blob){ try{ const db = await idb(); const tx = db.transaction("files", "readwrite"); blob ? tx.objectStore("files").put(blob, "guide") : tx.objectStore("files").delete("guide"); }catch(e){} }
+async function recGet(){ try{ const db = await idb(); return await new Promise(res => { const r = db.transaction("files").objectStore("files").get("guide"); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); }catch(e){ return null; } }
+function recUI(){
+  $("useRec").disabled = !recBlob; $("recPlay").disabled = !recBlob; $("recClear").disabled = !recBlob;
+  $("useRec").checked = !!recBlob && S.useRec;
+  $("recNote").textContent = recBlob ? `저장된 파일: ${recBlob.name || "안내 음성"}` : "저장된 파일이 없습니다.";
+}
+function stopRec(){ if(recAudio){ recAudio.onended = recAudio.onerror = null; recAudio.pause(); URL.revokeObjectURL(recAudio.src); recAudio = null; } }
+function playRec(cb){
+  stopRec();
+  recAudio = new Audio(URL.createObjectURL(recBlob)); recAudio.volume = Math.min(1, S.vol + .2);
+  const end = () => { stopRec(); cb && cb(); };
+  recAudio.onended = end; recAudio.onerror = end;
+  recAudio.play().catch(end);
+}
+$("recFile").onchange = e => { const f = e.target.files[0]; if(!f) return; recBlob = f; S.useRec = true; save(); recPut(f); recUI(); };
+$("useRec").onchange = e => { S.useRec = e.target.checked; save(); };
+$("recPlay").onclick = () => { if(recAudio) stopRec(); else if(recBlob) playRec(); };
+$("recClear").onclick = () => { stopRec(); recBlob = null; S.useRec = false; save(); recPut(null); $("recFile").value = ""; recUI(); };
+recGet().then(b => { recBlob = b; recUI(); });
+
+/* ---------- wake lock ---------- */
+let lock = null;
+async function keepAwake(on){
+  try{
+    if(on && !lock && navigator.wakeLock){ lock = await navigator.wakeLock.request("screen"); lock.addEventListener("release", () => lock = null); }
+    if(!on && lock){ await lock.release(); lock = null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && (bow.running || med.phase === "sit" || med.phase === "guide")) keepAwake(true); });
+
+const fmt = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h ? h + ":" + String(m).padStart(2,"0") : m) + ":" + String(x).padStart(2,"0"); };
+
+/* ---------- tabs ---------- */
+function showTab(which){
+  $("tab-bow").setAttribute("aria-selected", which === "bow"); $("tab-med").setAttribute("aria-selected", which === "med");
+  $("p-bow").hidden = which !== "bow"; $("p-med").hidden = which !== "med";
+  try{ localStorage.setItem("practice-tab", which); }catch(e){}
+}
+$("tab-bow").onclick = () => showTab("bow"); $("tab-med").onclick = () => showTab("med");
+try{ if(localStorage.getItem("practice-tab") === "med") showTab("med"); }catch(e){}
+
+/* ---------- 절 ---------- */
+const bow = { running:false, done:false, count:0, t0:0, nextK:1, bus:null, events:[], miles:[], fired:new Set(), elapsedBase:0, startedAt:0 };
+const bowMiles = () => [...new Set([...MILESTONES.filter(m => m < S.target), S.target])].sort((a,b) => a-b);
+
+function drawTrack(){
+  const tr = $("bowTrack"); tr.querySelectorAll(".mark").forEach(m => m.remove());
+  bowMiles().forEach(m => { if(m === S.target && m > 30 && m < S.target) return; const d = document.createElement("div"); d.className = "mark"; d.style.left = (m / S.target * 100) + "%"; d.innerHTML = `<span>${m}</span>`; if(m === S.target) d.style.left = "calc(100% - 1px)"; tr.appendChild(d); });
+}
+function bowUI(){
+  $("bowCount").textContent = bow.count;
+  $("bowUnit").textContent = `/ ${S.target}배`;
+  $("bowFill").style.width = Math.min(100, bow.count / S.target * 100) + "%";
+  $("bowTotal").textContent = fmt(S.target * S.tempo);
+  $("bowStart").textContent = bow.running ? "일시정지" : (bow.done ? "다시 시작" : (bow.count ? "계속하기" : "시작"));
+  const lock = bow.running; document.querySelectorAll("#targetChips .chip, #targetChips input, #tempo").forEach(e => e.disabled = lock);
+}
+function setTarget(v){
+  S.target = v; save();
+  document.querySelectorAll("#targetChips .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.v == v || (c.id === "targetCustomChip" && !MILESTONES.includes(v))));
+  if(MILESTONES.includes(v)) $("targetCustom").value = ""; else $("targetCustom").value = v;
+  drawTrack(); bowUI();
+}
+document.querySelectorAll("#targetChips button.chip").forEach(c => c.onclick = () => { if(!bow.running) setTarget(+c.dataset.v); });
+$("targetCustom").onchange = e => { const v = Math.round(+e.target.value); if(v >= 1 && !bow.running) setTarget(v); };
+$("tempo").oninput = e => { S.tempo = +e.target.value; $("tempoVal").textContent = S.tempo + "초"; save(); bowUI(); };
+
+function bowStart(){
+  ac();
+  if(bow.done){ bowReset(); }
+  const startK = bow.count + 1;              // resume from the next bow
+  const lead = bow.count ? 2 : 3;
+  bow.bus = newBus();
+  bow.t0 = ctx.currentTime + lead - (startK - 1) * S.tempo;
+  bow.nextK = startK;
+  bow.miles = bowMiles().filter(m => m >= bow.count && !bow.fired.has(m));
+  bow.events = [];
+  bow.running = true; bow.startedAt = ctx.currentTime + lead;
+  $("bowState").textContent = bow.count ? "곧 이어서 시작합니다" : "준비하세요";
+  keepAwake(true); bowUI();
+}
+function bowPause(){
+  bow.running = false; killBus(bow.bus); bow.bus = null; bow.events = [];
+  bow.elapsedBase += Math.max(0, ctx.currentTime - bow.startedAt);
+  $("bowState").textContent = "일시정지"; keepAwake(false); bowUI();
+}
+function bowReset(){
+  if(bow.running){ killBus(bow.bus); bow.running = false; }
+  Object.assign(bow, { done:false, count:0, events:[], fired:new Set(), elapsedBase:0 });
+  $("bowState").textContent = "목탁 소리에 맞춰 한 배씩"; $("bowElapsed").textContent = "0:00";
+  keepAwake(false); bowUI();
+}
+$("bowStart").onclick = () => bow.running ? bowPause() : bowStart();
+$("bowReset").onclick = bowReset;
+
+function bowTick(){
+  if(!bow.running) return;
+  const now = ctx.currentTime, ahead = now + 1.5;
+  while(bow.nextK <= S.target && bow.t0 + (bow.nextK - 1) * S.tempo < ahead){
+    const t = bow.t0 + (bow.nextK - 1) * S.tempo;
+    moktak(t, bow.bus); bow.events.push({ t, k:bow.nextK }); bow.nextK++;
+  }
+  while(bow.miles.length && bow.t0 + bow.miles[0] * S.tempo < ahead){
+    const m = bow.miles.shift(), t = bow.t0 + m * S.tempo;
+    bell(t, bow.bus, m === S.target ? 12 : 8);
+    if(m === S.target){ bell(t + 5, bow.bus, 10); bell(t + 10, bow.bus, 12); }
+    bow.events.push({ t, m });
+  }
+  bow.events.sort((a,b) => a.t - b.t);
+  while(bow.events.length && bow.events[0].t <= now){
+    const e = bow.events.shift();
+    if(e.k){
+      bow.count = e.k; $("bowState").textContent = `${e.k}번째 절`;
+      const b = $("bowCount"); b.classList.add("pulse"); setTimeout(() => b.classList.remove("pulse"), 140);
+    } else {
+      bow.fired.add(e.m); bow.count = Math.max(bow.count, e.m);
+      if(e.m === S.target){
+        bow.running = false; bow.done = true; bow.elapsedBase += now - bow.startedAt;
+        $("bowState").textContent = `${e.m}배를 모두 마쳤습니다`; say(`${e.m}배를 모두 마쳤습니다.`);
+        keepAwake(false);
+      } else { $("bowState").textContent = `${e.m}배 지점입니다`; say(`${e.m}배.`); }
+    }
+    bowUI();
+  }
+  if(bow.running) $("bowElapsed").textContent = fmt(bow.elapsedBase + Math.max(0, now - bow.startedAt));
+  else $("bowElapsed").textContent = fmt(bow.elapsedBase);
+}
+
+/* ---------- 명상 ---------- */
+const med = { phase:"idle", tEnd:0, remaining:0, bus:null };
+function setMed(v){
+  S.medMin = v; save();
+  document.querySelectorAll("#medChips .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.v == v || (c.id === "medCustomChip" && ![10,12,20,30].includes(v))));
+  if([10,12,20,30].includes(v)) $("medCustom").value = ""; else $("medCustom").value = v;
+  if(med.phase === "idle" || med.phase === "done") $("medTime").textContent = fmt(v * 60);
+}
+document.querySelectorAll("#medChips button.chip").forEach(c => c.onclick = () => { if(med.phase === "idle" || med.phase === "done") setMed(+c.dataset.v); });
+$("medCustom").onchange = e => { const v = Math.round(+e.target.value); if(v >= 1 && (med.phase === "idle" || med.phase === "done")) setMed(v); };
+
+function medUI(){
+  const p = med.phase;
+  $("medStart").textContent = p === "sit" ? "일시정지" : p === "paused" ? "계속하기" : p === "guide" ? "안내 중…" : "시작";
+  $("medStart").disabled = p === "guide";
+  $("medDial").classList.toggle("hidebig", S.hideTime && (p === "sit" || p === "guide"));
+  document.querySelectorAll("#medChips .chip, #medChips input").forEach(e => e.disabled = !(p === "idle" || p === "done"));
+}
+function sitFor(sec){
+  med.bus = newBus(); med.tEnd = ctx.currentTime + sec; med.phase = "sit";
+  bell(med.tEnd, med.bus, 10); bell(med.tEnd + 5, med.bus, 10); bell(med.tEnd + 10, med.bus, 14);
+  $("medState").textContent = "명상 중"; medUI();
+}
+function medStart(){
+  ac();
+  if(med.phase === "sit"){ med.remaining = med.tEnd - ctx.currentTime; killBus(med.bus); med.phase = "paused"; $("medState").textContent = "일시정지"; keepAwake(false); medUI(); return; }
+  if(med.phase === "paused"){ keepAwake(true); sitFor(med.remaining); return; }
+  keepAwake(true);
+  const sec = S.medMin * 60;
+  $("medTime").textContent = fmt(sec);
+  if(S.readGuide && S.useRec && recBlob){
+    med.phase = "guide"; $("medState").textContent = "안내를 듣고 있습니다"; medUI();
+    const tok = ++speakToken;
+    playRec(() => { if(tok === speakToken && med.phase === "guide") sitFor(sec); });
+  } else if(S.readGuide && synth){
+    med.phase = "guide"; $("medState").textContent = "안내문을 읽고 있습니다"; medUI();
+    const lines = S.guide.replace(/[()]/g, "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+    readLines(lines, () => { if(med.phase === "guide") sitFor(sec); });
+  } else sitFor(sec);
+}
+function medStop(){
+  speakToken++; if(synth) synth.cancel(); stopRec();
+  killBus(med.bus); med.bus = null; med.phase = "idle";
+  $("medTime").textContent = fmt(S.medMin * 60); $("medState").textContent = "시간이 되면 종이 세 번 울립니다";
+  keepAwake(false); medUI();
+}
+$("medStart").onclick = medStart; $("medStop").onclick = medStop;
+function medTick(){
+  if(med.phase === "sit"){
+    const r = med.tEnd - ctx.currentTime;
+    $("medTime").textContent = fmt(Math.ceil(r));
+    if(r <= 0){ med.phase = "done"; $("medTime").textContent = "0:00"; $("medState").textContent = "명상을 마쳤습니다"; keepAwake(false); medUI(); }
+  } else if(med.phase === "paused") $("medTime").textContent = fmt(Math.ceil(med.remaining));
+}
+$("readGuide").onchange = e => { S.readGuide = e.target.checked; save(); };
+$("hideTime").onchange = e => { S.hideTime = e.target.checked; save(); medUI(); };
+$("guide").oninput = e => { S.guide = e.target.value; save(); };
+$("guideReset").onclick = () => { S.guide = DEFAULT_GUIDE; $("guide").value = DEFAULT_GUIDE; save(); };
+
+/* ---------- sound settings ---------- */
+$("vol").oninput = e => { S.vol = +e.target.value; $("volVal").textContent = Math.round(S.vol*100) + "%"; if(master) master.gain.value = S.vol; save(); };
+$("rate").oninput = e => { S.rate = +e.target.value; $("rateVal").textContent = S.rate.toFixed(2) + "배"; save(); };
+$("voice").onchange = e => { S.voice = e.target.value; save(); };
+$("pitch").oninput = e => { S.pitch = +e.target.value; $("pitchVal").textContent = S.pitch.toFixed(2); save(); };
+$("gap").oninput = e => { S.gap = +e.target.value; $("gapVal").textContent = S.gap + "초"; save(); };
+$("tMok").onclick = () => { ac(); const b = newBus(); moktak(ctx.currentTime + .05, b); };
+$("tBell").onclick = () => { ac(); const b = newBus(); bell(ctx.currentTime + .05, b, 8); };
+$("tVoice").onclick = () => { if(synth){ synth.cancel(); readLines(S.guide.replace(/[()]/g, "").split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 2), () => {}); } };
+
+document.addEventListener("keydown", e => {
+  if(e.code !== "Space" || /INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)) return;
+  e.preventDefault();
+  if(!$("p-bow").hidden) $("bowStart").click(); else if(med.phase !== "guide") $("medStart").click();
+});
+
+/* ---------- init ---------- */
+$("tempo").value = S.tempo; $("tempoVal").textContent = S.tempo + "초";
+$("vol").value = S.vol; $("volVal").textContent = Math.round(S.vol*100) + "%";
+$("rate").value = S.rate; $("rateVal").textContent = S.rate.toFixed(2) + "배";
+$("pitch").value = S.pitch; $("pitchVal").textContent = S.pitch.toFixed(2);
+$("gap").value = S.gap; $("gapVal").textContent = S.gap + "초";
+$("readGuide").checked = S.readGuide; $("hideTime").checked = S.hideTime; $("guide").value = S.guide;
+setTarget(S.target); setMed(S.medMin); medUI();
+setInterval(() => { if(ctx){ bowTick(); medTick(); } }, 100);
+})();
+</script>
+</body>
+</html>
