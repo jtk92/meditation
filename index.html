@@ -121,7 +121,8 @@ select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);ba
       </div>
       <span class="note" id="cueNote"></span>
       <div class="chips" id="soundChips">
-        <button class="chip" data-v="soft" aria-pressed="true">부드러운 나무 음</button>
+        <button class="chip" data-v="wind" aria-pressed="true">풍경</button>
+        <button class="chip" data-v="soft" aria-pressed="false">부드러운 나무 음</button>
         <button class="chip" data-v="chime" aria-pressed="false">작은 종</button>
         <button class="chip" data-v="wood" aria-pressed="false">목탁</button>
         <button class="chip" id="soundTry">▶ 듣기</button>
@@ -234,7 +235,7 @@ const DEFAULT_GUIDE = "몸과 마음을 편안히 한 후 모든 동작과 생�
 const MILESTONES = [108, 200, 300];
 
 /* ---------- settings ---------- */
-const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.75, pitch:0.9, gap:2.5, voice:"", readGuide:true, hideTime:false, useRec:false, chain:false, chainGap:10, cues:3, cueSound:"soft", opening:"잠시 명상하겠습니다.", guide:DEFAULT_GUIDE };
+const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.75, pitch:0.9, gap:2.5, voice:"", readGuide:true, hideTime:false, useRec:false, chain:false, chainGap:10, cues:3, cueSound:"wind", opening:"잠시 명상하겠습니다.", guide:DEFAULT_GUIDE };
 try { Object.assign(S, JSON.parse(localStorage.getItem("practice-timer") || "{}")); } catch(e) {}
 const save = () => { try { localStorage.setItem("practice-timer", JSON.stringify(S)); } catch(e) {} };
 
@@ -272,6 +273,11 @@ function tone(t, bus, freq, peak, decay, type = "sine", attack = .012){
 function cue(t, bus, level = 1, pm = 1){
   const light = level < 1;
   if(S.cueSound === "wood") return moktak(t, bus, level, pm);
+  if(S.cueSound === "wind"){
+    const base = light ? 1568 : 1175;
+    [[1, .09], [2.76, .035], [5.4, .015]].forEach(([r, a]) => tone(t, bus, base * r, a * (light ? .6 : 1), light ? 1.8 : 3, "sine", .003));
+    return;
+  }
   if(S.cueSound === "chime"){
     const base = light ? 1046 : 784;
     [[1, .16], [2.4, .05], [4.1, .02]].forEach(([r, a]) => tone(t, bus, base * r, a * (light ? .6 : 1), light ? 1.6 : 2.6, "sine", .005));
@@ -619,7 +625,8 @@ $("readGuide").checked = S.readGuide; $("hideTime").checked = S.hideTime;
 $("chain").checked = S.chain; $("chainGap").value = S.chainGap;
 $("opening").value = S.opening;
 const soundUI = () => document.querySelectorAll("#soundChips .chip[data-v]").forEach(c => c.setAttribute("aria-pressed", c.dataset.v === S.cueSound));
-document.querySelectorAll("#soundChips .chip[data-v]").forEach(c => c.onclick = () => { S.cueSound = c.dataset.v; save(); soundUI(); $("tMok").click(); });
+if(!S.cueChosen) S.cueSound = "wind";
+document.querySelectorAll("#soundChips .chip[data-v]").forEach(c => c.onclick = () => { S.cueSound = c.dataset.v; S.cueChosen = true; save(); soundUI(); $("tMok").click(); });
 $("soundTry").onclick = () => $("tMok").click();
 soundUI();
 $("opening").oninput = e => { S.opening = e.target.value; save(); }; $("guide").value = S.guide;
