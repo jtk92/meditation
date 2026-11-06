@@ -111,6 +111,13 @@ select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);ba
       <div class="row"><input id="tempo" type="range" min="5" max="20" step="0.5" value="10"><span class="val" id="tempoVal">10초</span></div>
     </div>
 
+    <label class="check"><input type="checkbox" id="chain"> 절을 마치면 명상으로 이어가기</label>
+    <div class="field" id="chainGapField">
+      <label class="label" for="chainGap">명상 전 쉬는 시간</label>
+      <div class="row"><input id="chainGap" type="range" min="5" max="60" step="5" value="10"><span class="val" id="chainGapVal">10초</span></div>
+      <span class="note" id="chainNote"></span>
+    </div>
+
     <div class="actions">
       <button class="btn primary" id="bowStart">시작</button>
       <button class="btn" id="bowReset">처음으로</button>
@@ -205,7 +212,7 @@ const DEFAULT_GUIDE = "몸과 마음을 편안히 한 후 모든 동작과 생�
 const MILESTONES = [108, 200, 300];
 
 /* ---------- settings ---------- */
-const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.8, pitch:0.95, gap:2, voice:"", readGuide:true, hideTime:false, useRec:false, guide:DEFAULT_GUIDE };
+const S = { target:108, tempo:10, medMin:12, vol:0.8, rate:0.8, pitch:0.95, gap:2, voice:"", readGuide:true, hideTime:false, useRec:false, chain:false, chainGap:10, guide:DEFAULT_GUIDE };
 try { Object.assign(S, JSON.parse(localStorage.getItem("practice-timer") || "{}")); } catch(e) {}
 const save = () => { try { localStorage.setItem("practice-timer", JSON.stringify(S)); } catch(e) {} };
 
@@ -355,7 +362,7 @@ function setTarget(v){
   S.target = v; save();
   document.querySelectorAll("#targetChips .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.v == v || (c.id === "targetCustomChip" && !MILESTONES.includes(v))));
   if(MILESTONES.includes(v)) $("targetCustom").value = ""; else $("targetCustom").value = v;
-  drawTrack(); bowUI();
+  drawTrack(); bowUI(); if(typeof chainUI === "function") chainUI();
 }
 document.querySelectorAll("#targetChips button.chip").forEach(c => c.onclick = () => { if(!bow.running) setTarget(+c.dataset.v); });
 $("targetCustom").onchange = e => { const v = Math.round(+e.target.value); if(v >= 1 && !bow.running) setTarget(v); };
@@ -380,7 +387,32 @@ function bowPause(){
   bow.elapsedBase += Math.max(0, ctx.currentTime - bow.startedAt);
   $("bowState").textContent = "일시정지"; keepAwake(false); bowUI();
 }
+/* 절 → 명상 이어하기 */
+let chainTimer = null;
+function startChain(){
+  cancelChain();
+  const end = Date.now() + S.chainGap * 1000;
+  const tick = () => {
+    const r = Math.ceil((end - Date.now()) / 1000);
+    if(r > 0){ $("bowState").textContent = `${r}초 뒤 명상을 시작합니다`; return; }
+    cancelChain();
+    showTab("med");
+    if(med.phase !== "idle" && med.phase !== "done") medStop();
+    medStart();
+  };
+  tick(); chainTimer = setInterval(tick, 250);
+}
+function cancelChain(){ if(chainTimer){ clearInterval(chainTimer); chainTimer = null; } }
+function chainUI(){
+  $("chainGapField").hidden = !S.chain;
+  $("chainGapVal").textContent = S.chainGap + "초";
+  $("chainNote").textContent = `${S.target}배 → ${S.chainGap}초 쉬기 → ${S.readGuide ? "안내문 → " : ""}${S.medMin}분 명상`;
+}
+$("chain").onchange = e => { S.chain = e.target.checked; save(); chainUI(); };
+$("chainGap").oninput = e => { S.chainGap = +e.target.value; save(); chainUI(); };
+
 function bowReset(){
+  cancelChain();
   if(bow.running){ killBus(bow.bus); bow.running = false; }
   Object.assign(bow, { done:false, count:0, events:[], fired:new Set(), elapsedBase:0 });
   $("bowState").textContent = "목탁 소리에 맞춰 한 배씩"; $("bowElapsed").textContent = "0:00";
@@ -399,7 +431,7 @@ function bowTick(){
   while(bow.miles.length && bow.t0 + bow.miles[0] * S.tempo < ahead){
     const m = bow.miles.shift(), t = bow.t0 + m * S.tempo;
     bell(t, bow.bus, m === S.target ? 12 : 8);
-    if(m === S.target){ bell(t + 5, bow.bus, 10); bell(t + 10, bow.bus, 12); }
+    if(m === S.target && !S.chain){ bell(t + 5, bow.bus, 10); bell(t + 10, bow.bus, 12); }
     bow.events.push({ t, m });
   }
   bow.events.sort((a,b) => a.t - b.t);
@@ -413,7 +445,7 @@ function bowTick(){
       if(e.m === S.target){
         bow.running = false; bow.done = true; bow.elapsedBase += now - bow.startedAt;
         $("bowState").textContent = `${e.m}배를 모두 마쳤습니다`; say(`${e.m}배를 모두 마쳤습니다.`);
-        keepAwake(false);
+        if(S.chain) startChain(); else keepAwake(false);
       } else { $("bowState").textContent = `${e.m}배 지점입니다`; say(`${e.m}배.`); }
     }
     bowUI();
@@ -429,6 +461,7 @@ function setMed(v){
   document.querySelectorAll("#medChips .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.v == v || (c.id === "medCustomChip" && ![10,12,20,30].includes(v))));
   if([10,12,20,30].includes(v)) $("medCustom").value = ""; else $("medCustom").value = v;
   if(med.phase === "idle" || med.phase === "done") $("medTime").textContent = fmt(v * 60);
+  chainUI();
 }
 document.querySelectorAll("#medChips button.chip").forEach(c => c.onclick = () => { if(med.phase === "idle" || med.phase === "done") setMed(+c.dataset.v); });
 $("medCustom").onchange = e => { const v = Math.round(+e.target.value); if(v >= 1 && (med.phase === "idle" || med.phase === "done")) setMed(v); };
@@ -476,7 +509,7 @@ function medTick(){
     if(r <= 0){ med.phase = "done"; $("medTime").textContent = "0:00"; $("medState").textContent = "명상을 마쳤습니다"; keepAwake(false); medUI(); }
   } else if(med.phase === "paused") $("medTime").textContent = fmt(Math.ceil(med.remaining));
 }
-$("readGuide").onchange = e => { S.readGuide = e.target.checked; save(); };
+$("readGuide").onchange = e => { S.readGuide = e.target.checked; save(); chainUI(); };
 $("hideTime").onchange = e => { S.hideTime = e.target.checked; save(); medUI(); };
 $("guide").oninput = e => { S.guide = e.target.value; save(); };
 $("guideReset").onclick = () => { S.guide = DEFAULT_GUIDE; $("guide").value = DEFAULT_GUIDE; save(); };
@@ -503,7 +536,8 @@ $("vol").value = S.vol; $("volVal").textContent = Math.round(S.vol*100) + "%";
 $("rate").value = S.rate; $("rateVal").textContent = S.rate.toFixed(2) + "배";
 $("pitch").value = S.pitch; $("pitchVal").textContent = S.pitch.toFixed(2);
 $("gap").value = S.gap; $("gapVal").textContent = S.gap + "초";
-$("readGuide").checked = S.readGuide; $("hideTime").checked = S.hideTime; $("guide").value = S.guide;
+$("readGuide").checked = S.readGuide; $("hideTime").checked = S.hideTime;
+$("chain").checked = S.chain; $("chainGap").value = S.chainGap; $("guide").value = S.guide;
 setTarget(S.target); setMed(S.medMin); medUI();
 setInterval(() => { if(ctx){ bowTick(); medTick(); } }, 100);
 })();
